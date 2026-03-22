@@ -222,7 +222,7 @@ def restore_workflow(item):
 def main() -> int:
     data = get_data_from_excel()
     data_list = format_data_for_restore(data)
-    count = 5
+    count = 200
     index = 0
 
     for item in data_list:
