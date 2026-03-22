@@ -209,11 +209,12 @@ def create_bins_from_json(
         else:
             ok_count += 1
             if not skip_timeline:
-                timeline_name = f"Decoy - {segments[-1]}"
-                if _create_timeline_in_leaf_bin(mp, project, leaf, timeline_name):
-                    timeline_ok += 1
-                else:
-                    timeline_fail += 1
+                for file in item["files"]:
+                    timeline_name = file
+                    if _create_timeline_in_leaf_bin(mp, project, leaf, timeline_name):
+                        timeline_ok += 1
+                    else:
+                        timeline_fail += 1
 
     if not mp.SetCurrentFolder(root):
         print(
