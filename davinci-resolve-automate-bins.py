@@ -200,6 +200,7 @@ def create_bins_from_json(
 
         leaf = ensure_bin_path(mp, root, segments, folder_cache)
         print(item["name"])
+        last_part = item["name"].split("\\")[-1]
         if leaf is None:
             print(
                 f"[automate-bins] Lỗi tạo path: {rel!r}",
@@ -210,7 +211,7 @@ def create_bins_from_json(
             ok_count += 1
             if not skip_timeline:
                 for file in item["files"]:
-                    timeline_name = file
+                    timeline_name = f"{last_part} - {file}"
                     if _create_timeline_in_leaf_bin(mp, project, leaf, timeline_name):
                         timeline_ok += 1
                     else:
