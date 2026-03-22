@@ -13,13 +13,13 @@ Trên Windows, hook bàn phím toàn cục có thể cần chạy terminal với
 from __future__ import annotations
 
 import argparse
-import os
 import sys
 import time
-from pathlib import Path
 
 import pyautogui
 import keyboard
+
+from utils import configure_resolve_paths, get_resolve
 
 
 def _is_key_down_event(event: keyboard.KeyboardEvent) -> bool:
@@ -50,54 +50,6 @@ def listen_keyboard_events(stop_key: str = "esc") -> None:
         keyboard.wait(stop_key)
     finally:
         keyboard.unhook_all()
-
-
-def configure_resolve_paths() -> None:
-    api = os.environ.get("RESOLVE_SCRIPT_API")
-    if api:
-        modules = Path(api) / "Modules"
-        if modules.is_dir():
-            s = str(modules.resolve())
-            if s not in sys.path:
-                sys.path.insert(0, s)
-
-    if not os.environ.get("RESOLVE_SCRIPT_LIB") and sys.platform == "win32":
-        pf = os.environ.get("ProgramFiles", r"C:\Program Files")
-        dll = Path(pf) / "Blackmagic Design" / "DaVinci Resolve" / "fusionscript.dll"
-        if dll.is_file():
-            os.environ["RESOLVE_SCRIPT_LIB"] = str(dll)
-
-    if sys.platform == "win32" and not os.environ.get("RESOLVE_SCRIPT_API"):
-        pd = os.environ.get("PROGRAMDATA", r"C:\ProgramData")
-        mods = (
-            Path(pd)
-            / "Blackmagic Design"
-            / "DaVinci Resolve"
-            / "Support"
-            / "Developer"
-            / "Scripting"
-            / "Modules"
-        )
-        if mods.is_dir():
-            s = str(mods.resolve())
-            if s not in sys.path:
-                sys.path.insert(0, s)
-
-
-def get_resolve():
-    configure_resolve_paths()
-    try:
-        import DaVinciResolveScript as dvr_script  # type: ignore[import-untyped]
-    except ImportError as e:
-        print(f"[resolve] Import lỗi: {e}", file=sys.stderr)
-        return None
-    resolve = dvr_script.scriptapp("Resolve")
-    if resolve is None:
-        print(
-            "[resolve] scriptapp('Resolve') = None — mở DaVinci Resolve rồi chạy lại.",
-            file=sys.stderr,
-        )
-    return resolve
 
 
 def test_pyautogui() -> bool:
