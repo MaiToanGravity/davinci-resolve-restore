@@ -11,139 +11,227 @@ Bắt mọi sự kiện phím (keydown) cho đến khi nhấn phím thoát (mặ
 Trên Windows, hook bàn phím toàn cục có thể cần chạy terminal với quyền Administrator.
 """
 from __future__ import annotations
+from pathlib import PureWindowsPath
+import pyperclip
 
-import argparse
+BACKUP_LOCATION = r"C:\\Toan\\Project\\Davinci Restore\\Resolve Project Backups"
+ORIGINAL_LOCATION = r"C:\\Toan\\Project\\Davinci Resolve\\davinci-resolve-restore\\original"
+RESTORE_LOCATION = r"C:\\Toan\\Project\\Davinci Resolve\\davinci-resolve-restore\\restore"
+OUTPUT_LOCATION = r"C:\\Toan\\Project\\Davinci Resolve\\davinci-resolve-restore\\output"
+
 import sys
-import time
-
+import pandas as pd
 import pyautogui
 import keyboard
+import os
+from utils import configure_resolve_paths, get_resolve, launch_resolve, wait_for_resolve
+import json
+import time
+import shutil
+from pathlib import Path
 
-from utils import configure_resolve_paths, get_resolve
+def get_data_from_excel():
+    df = pd.read_excel( os.path.join(OUTPUT_LOCATION, 'data.xlsx'), sheet_name=None)
+    # Convert to JSON
+    
+    return df
 
+def format_data_for_restore(data):
+    data_list = []
+    data_restore = []
+    for sheet_name, df in data.items():
+        for index, row in df.iterrows():
+            # Ô trống trong Excel → float('nan'), không phải None — dùng pd.isna
+            tn = row["Timeline Name"]
+            timeline_name = "" if pd.isna(tn) else str(tn).strip()
+            data_list.append({
+                "folder": row['Folder'],
+                "backup_name": row['Backup Name'],
+                "timeline_name": timeline_name,
+            })
+    # Get data from json
+    with open(os.path.join(OUTPUT_LOCATION, 'restore_data.json'), 'r') as f:
+        data_restore = json.load(f)
+    # Filter data_list not in data_restore
+    filtered_data_list = []
+    for item in data_list:
+        all_same = False
+        for restore_item in data_restore:
+            if item["folder"] == restore_item["folder"] and item["backup_name"] == restore_item["backup_name"]:
+                all_same = True
+                break
+        if all_same:
+            continue
+        filtered_data_list.append(item)
+    return filtered_data_list
 
-def _is_key_down_event(event: keyboard.KeyboardEvent) -> bool:
-    kd = getattr(keyboard, "KEY_DOWN", None)
-    if kd is not None:
-        return event.event_type == kd
-    return str(event.event_type).lower() in ("down", "key down")
-
-
-def listen_keyboard_events(stop_key: str = "esc") -> None:
-    """
-    Gắn hook toàn cục: in mỗi lần nhấn phím (keydown) cho đến khi nhấn stop_key.
-    """
-    stop_key = stop_key.strip().lower() or "esc"
-
-    def on_event(event: keyboard.KeyboardEvent) -> None:
-        if not _is_key_down_event(event):
-            return
-        name = event.name or "?"
-        print(f"[key] down name={name!r} scan={event.scan_code}", flush=True)
-
-    print(
-        f"Đang bắt sự kiện bàn phím — nhấn {stop_key!r} để thoát.",
-        flush=True,
-    )
-    keyboard.hook(on_event)
-    try:
-        keyboard.wait(stop_key)
-    finally:
-        keyboard.unhook_all()
-
-
-def test_pyautogui() -> bool:
-    try:
-        w, h = pyautogui.size()
-        x, y = pyautogui.position()
-        print(f"[pyautogui] Màn hình {w}x{h}, vị trí chuột ({x}, {y})")
-        return True
-    except Exception as e:
-        print(f"[pyautogui] Lỗi: {e}", file=sys.stderr)
-        return False
-
-
-def test_keyboard() -> bool:
-    try:
-        print("[keyboard] Trong 4 giây tới, nhấn phím Space để xác nhận hook hoạt động…")
-        deadline = time.monotonic() + 4.0
-        while time.monotonic() < deadline:
-            if keyboard.is_pressed("space"):
-                print("[keyboard] Đã nhận Space — OK")
-                return True
-            time.sleep(0.05)
-        print(
-            "[keyboard] Không nhận Space (bỏ qua được). "
-            "Nếu hook lỗi, thử chạy terminal/script với quyền Administrator.",
-        )
-        return True
-    except Exception as e:
-        print(f"[keyboard] Lỗi: {e}", file=sys.stderr)
-        return False
-
-
-def test_resolve() -> bool:
+def open_davinci_resolve():
+    configure_resolve_paths()
     resolve = get_resolve()
     if resolve is None:
-        return False
-    try:
-        name = resolve.GetProductName()
-        ver = resolve.GetVersionString()
-        print(f"[resolve] {name} — {ver}")
-        pm = resolve.GetProjectManager()
-        proj = pm.GetCurrentProject() if pm else None
-        if proj:
-            print(f"[resolve] Dự án đang mở: {proj.GetName()}")
-        else:
-            print("[resolve] Chưa có dự án đang mở (vẫn coi là kết nối OK).")
-        return True
-    except Exception as e:
-        print(f"[resolve] Lỗi gọi API: {e}", file=sys.stderr)
-        return False
+        print("Không tìm thấy Resolve.exe (cài đặt chuẩn trong Program Files).")
+        return 1
+    return resolve
 
+def open_davinci_resolve_and_load_project_restore():
+    configure_resolve_paths()
+    resolve = get_resolve()
+    if resolve is None:
+        print("Đang thử mở DaVinci Resolve…")
+        if not launch_resolve():
+            print("Không tìm thấy Resolve.exe (cài đặt chuẩn trong Program Files).")
+            return 1
+        resolve = wait_for_resolve(get_resolve, timeout=90.0, interval=0.1)
+    if resolve is None:
+        print("DaVinci Resolve không phản hồi scripting — mở app thủ công rồi chạy lại.")
+        return 1
+    project = resolve.GetProjectManager().GetCurrentProject()
+    if project is None:
+        print("Không tìm thấy project")
+        return 1
+    pm = resolve.GetProjectManager()
+    pm.LoadProject("Restore")
+    return resolve, project
+
+def create_new_timeline_backup(name):
+    pyautogui.click(-1478, 152)
+    pyautogui.hotkey("ctrl", "alt", "s")
+    time.sleep(0.1)
+    pyautogui.typewrite(name)
+    pyautogui.press("enter")
+    time.sleep(0.1)
+
+def close_davinci_resolve():
+    pyautogui.click(-21, 15)
+
+def iter_files(root: Path, recursive: bool) -> list[Path]:
+    if not root.is_dir():
+        return []
+    if recursive:
+        return sorted(p for p in root.rglob("*") if p.is_file())
+    return sorted(p for p in root.iterdir() if p.is_file())
+
+def replace_timeline_backup(item, name_backup):
+    files_backup = iter_files(Path(BACKUP_LOCATION), recursive=True)
+    original_file = os.path.abspath(os.path.join(ORIGINAL_LOCATION, item["folder"], item["backup_name"]))
+    for file in files_backup:
+        if name_backup in file.name:
+            shutil.copy(original_file, file)
+            break
+
+def clean_up_backup_folder():
+    for file in os.listdir(BACKUP_LOCATION):
+        path = os.path.join(BACKUP_LOCATION, file)
+        if os.path.isfile(path):
+            os.remove(path)
+        elif os.path.isdir(path):
+            shutil.rmtree(path)
+
+def get_list_timeline():
+    configure_resolve_paths()
+    resolve = get_resolve()
+    if resolve is None:
+        print("Không tìm thấy Resolve.exe (cài đặt chuẩn trong Program Files).")
+        return 1
+    project = resolve.GetProjectManager().GetCurrentProject()
+    mp = project.GetMediaPool()
+    if project is None:
+        print("Không tìm thấy project")
+        return 1
+    count_timeline = project.GetTimelineCount()
+    list_timeline = []
+    for i in range(1, count_timeline + 1):
+        current_timeline = project.GetTimelineByIndex(i)
+        current_timeline_name = current_timeline.GetName()
+        list_timeline.append(current_timeline_name)
+    return list_timeline
+    
+
+def restore_timeline_backup():
+    pyautogui.rightClick(-1478, 152)
+    # Auto control restore
+    # Type down arrow 9 times
+    for i in range(9):
+        pyautogui.press("down")
+    pyautogui.press("right")
+    pyautogui.press("enter")
+
+    # Copy name of the timeline
+    list_timeline = get_list_timeline()
+    print('list_timeline: ', list_timeline)
+    # Remove timeline is 000000000000000-Decoy
+    list_timeline = [timeline for timeline in list_timeline if "000000000000000-Decoy" not in timeline]
+    return list_timeline[0]
+
+def export_timeline_backup(name_timeline, name_timeline_file, item):
+    # Use davinci resolve to export timeline backup
+    configure_resolve_paths()
+    resolve = get_resolve()
+    if resolve is None:
+        print("Không tìm thấy Resolve.exe (cài đặt chuẩn trong Program Files).")
+        return 1
+    project = resolve.GetProjectManager().GetCurrentProject()
+    mp = project.GetMediaPool()
+    if project is None:
+        print("Không tìm thấy project")
+        return 1
+    count_timeline = project.GetTimelineCount()
+    for i in range(1, count_timeline + 1):
+        current_timeline = project.GetTimelineByIndex(i)
+        current_timeline_name = current_timeline.GetName()
+        if current_timeline_name == name_timeline:
+            output_path = os.path.join(RESTORE_LOCATION, item["folder"], name_timeline_file)
+            current_timeline.Export(output_path, resolve.EXPORT_FCP_7_XML)
+            mp.DeleteTimelines([current_timeline])
+            break
+
+def update_result_json(name_timeline_file, item):
+    with open(os.path.join(OUTPUT_LOCATION, 'restore_data.json'), 'r') as f:
+        data = json.load(f)
+    data.append({
+        "folder": item["folder"],
+        "backup_name": item["backup_name"],
+        "timeline_name": name_timeline_file,
+    })
+    with open(os.path.join(OUTPUT_LOCATION, 'restore_data.json'), 'w') as f:
+        json.dump(data, f, indent=4)
+
+def restore_workflow(item):
+    # Remove all files in BACKUP_LOCATION
+    clean_up_backup_folder()
+    open_davinci_resolve_and_load_project_restore()
+    p = PureWindowsPath(item["folder"])
+    name_backup = f"{p.name} - {item["backup_name"]} Backup"
+
+    # Create new timeline backup and close app
+    create_new_timeline_backup(name_backup)
+    close_davinci_resolve()
+
+    # # Replace timeline backup
+    replace_timeline_backup(item, name_backup)
+    time.sleep(2)
+    open_davinci_resolve_and_load_project_restore()
+
+    name_timeline = restore_timeline_backup()
+    name_timeline_file = f'{name_timeline}-{item["backup_name"]}.xml'
+    export_timeline_backup(name_timeline, name_timeline_file, item)
+    time.sleep(1)
+    close_davinci_resolve()
+    update_result_json(name_timeline_file, item)
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Smoke test Resolve / pyautogui / keyboard")
-    parser.add_argument(
-        "--listen",
-        action="store_true",
-        help="Chỉ chạy bắt sự kiện bàn phím (hook) cho đến khi nhấn phím thoát",
-    )
-    parser.add_argument(
-        "--stop-key",
-        default="esc",
-        metavar="KEY",
-        help="Phím dừng khi dùng --listen (mặc định: esc)",
-    )
-    parser.add_argument(
-        "--skip-resolve",
-        action="store_true",
-        help="Bỏ qua test DaVinci Resolve API",
-    )
-    parser.add_argument(
-        "--skip-ui",
-        action="store_true",
-        help="Bỏ qua test pyautogui và keyboard",
-    )
-    args = parser.parse_args()
+    data = get_data_from_excel()
+    data_list = format_data_for_restore(data)
+    count = 5
+    index = 0
 
-    if args.listen:
-        try:
-            listen_keyboard_events(args.stop_key)
-        except Exception as e:
-            print(f"[keyboard] Lỗi hook: {e}", file=sys.stderr)
-            return 1
-        return 0
-
-    ok = True
-    if not args.skip_ui:
-        ok = test_pyautogui() and ok
-        ok = test_keyboard() and ok
-    if not args.skip_resolve:
-        ok = test_resolve() and ok
-
-    return 0 if ok else 1
-
+    for item in data_list:
+        if index >= count:
+            break
+        index += 1
+        print('item: ', item)
+        restore_workflow(item)
+        time.sleep(2)
 
 if __name__ == "__main__":
     raise SystemExit(main())

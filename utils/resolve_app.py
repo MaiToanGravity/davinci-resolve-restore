@@ -17,7 +17,7 @@ def get_resolve():
     resolve = dvr_script.scriptapp("Resolve")
     if resolve is None:
         print(
-            "[resolve] scriptapp('Resolve') = None — mở DaVinci Resolve rồi chạy lại.",
+            "[resolve] Waiting for Resolve to be ready...",
             file=sys.stderr,
         )
     return resolve

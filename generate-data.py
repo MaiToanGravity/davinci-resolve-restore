@@ -97,13 +97,11 @@ def _folder_data_to_rows_by_sheet(
         last = last_folder_per_sheet.get(sheet)
         if files:
             for f in files:
-                folder_cell = "" if folder == last else folder
-                by_sheet[sheet].append(_excel_export_row(folder_cell, f))
+                by_sheet[sheet].append(_excel_export_row(folder, f))
                 last = folder
             last_folder_per_sheet[sheet] = last
         else:
-            folder_cell = "" if folder == last else folder
-            by_sheet[sheet].append(_excel_export_row(folder_cell, None))
+            by_sheet[sheet].append(_excel_export_row(folder, None))
             last_folder_per_sheet[sheet] = folder
     return dict(by_sheet)
 
