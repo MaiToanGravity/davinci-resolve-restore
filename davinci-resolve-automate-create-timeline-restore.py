@@ -56,7 +56,7 @@ def main() -> int:
             if index == 0:
                 pyautogui.click(-1478, 152)
             print(item.GetName())
-            create_new_timeline_backup(item.GetName())
+            create_new_timeline_backup(item.GetName() + " Backup")
             pyautogui.press("down")
             index += 1
 

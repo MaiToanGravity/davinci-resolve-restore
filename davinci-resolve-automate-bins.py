@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -136,7 +137,9 @@ def _create_timeline_in_leaf_bin(mp, project, leaf, timeline_name: str) -> bool:
             file=sys.stderr,
         )
         return False
-    tl = mp.CreateEmptyTimeline(timeline_name)
+    # tl = mp.CreateEmptyTimeline(timeline_name)
+    # print(os.path.abspath(Path('output') / 'decoy.aaf'))
+    tl = mp.ImportTimelineFromFile(os.path.abspath(Path('output') / 'decoy.aaf'), {"timelineName": timeline_name})
     if tl is None:
         print(
             f"[automate-bins] CreateEmptyTimeline({timeline_name!r}) thất bại.",
