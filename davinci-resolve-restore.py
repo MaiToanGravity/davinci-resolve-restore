@@ -33,8 +33,11 @@ from pathlib import Path
 def get_data_from_excel():
     df = pd.read_excel( os.path.join(OUTPUT_LOCATION, 'data.xlsx'), sheet_name=None)
     # Convert to JSON
-    
     return df
+
+def click_on_decoy_timeline():
+    pyautogui.click(-1478, 152)
+    # pyautogui.click(-2216, 156)
 
 def format_data_for_restore(data):
     data_list = []
@@ -91,10 +94,10 @@ def open_davinci_resolve_and_load_project_restore():
         return 1
     pm = resolve.GetProjectManager()
     pm.LoadProject("Restore")
-    return resolve, project
+    return resolve, project, pm
 
 def create_new_timeline_backup(name):
-    pyautogui.click(-1478, 152)
+    click_on_decoy_timeline()
     pyautogui.hotkey("ctrl", "alt", "s")
     time.sleep(0.1)
     pyautogui.typewrite(name)
@@ -181,7 +184,7 @@ def export_timeline_backup(name_timeline, name_timeline_file, item):
         current_timeline_name = current_timeline.GetName()
         if current_timeline_name == name_timeline:
             output_path = os.path.join(RESTORE_LOCATION, item["folder"], name_timeline_file)
-            current_timeline.Export(output_path, resolve.EXPORT_FCP_7_XML)
+            current_timeline.Export(output_path, resolve.EXPORT_DRT)
             mp.DeleteTimelines([current_timeline])
             break
 
@@ -207,29 +210,30 @@ def restore_workflow(item):
     create_new_timeline_backup(name_backup)
     close_davinci_resolve()
 
-    # # Replace timeline backup
+    # Replace timeline backup
     replace_timeline_backup(item, name_backup)
     time.sleep(2)
-    open_davinci_resolve_and_load_project_restore()
+    resolve, project, pm = open_davinci_resolve_and_load_project_restore()
 
     name_timeline = restore_timeline_backup()
-    name_timeline_file = f'{name_timeline}-{item["backup_name"]}.xml'
+    name_timeline_file = f'{name_timeline}-{item["backup_name"]}.drt'
     export_timeline_backup(name_timeline, name_timeline_file, item)
     time.sleep(1)
     close_davinci_resolve()
+    pyautogui.press("enter")
     update_result_json(name_timeline_file, item)
 
 def main() -> int:
     data = get_data_from_excel()
     data_list = format_data_for_restore(data)
-    count = 200
+    count = 20
     index = 0
 
     for item in data_list:
         if index >= count:
             break
         index += 1
-        print('item: ', item)
+        print('start restore: ', item)
         restore_workflow(item)
         time.sleep(2)
 
