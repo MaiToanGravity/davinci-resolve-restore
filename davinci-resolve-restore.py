@@ -84,7 +84,7 @@ def open_davinci_resolve_and_load_project_restore():
         if not launch_resolve():
             print("Không tìm thấy Resolve.exe (cài đặt chuẩn trong Program Files).")
             return 1
-        resolve = wait_for_resolve(get_resolve, timeout=90.0, interval=0.1)
+        resolve = wait_for_resolve(get_resolve, timeout=120.0, interval=0.1)
     if resolve is None:
         print("DaVinci Resolve không phản hồi scripting — mở app thủ công rồi chạy lại.")
         return 1
