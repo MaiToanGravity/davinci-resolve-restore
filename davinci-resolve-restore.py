@@ -233,4 +233,25 @@ def main() -> int:
         time.sleep(2)
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    while True:
+        try:
+            code = main()
+            if code != 0:
+                print(
+                    f"[retry] main() trả về {code}, chạy lại sau 2 giây…",
+                    file=sys.stderr,
+                )
+                time.sleep(2)
+                continue
+            raise SystemExit(0)
+        except KeyboardInterrupt:
+            print("\nĐã dừng (KeyboardInterrupt).", file=sys.stderr)
+            raise SystemExit(130) from None
+        except Exception:
+            print(
+                "[retry] Lỗi không mong đợi, chạy lại main() sau 2 giây…",
+                file=sys.stderr,
+            )
+            import traceback
+            traceback.print_exc()
+            time.sleep(2)
