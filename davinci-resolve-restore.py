@@ -161,7 +161,6 @@ def restore_timeline_backup():
 
     # Copy name of the timeline
     list_timeline = get_list_timeline()
-    print('list_timeline: ', list_timeline)
     # Remove timeline is 000000000000000-Decoy
     list_timeline = [timeline for timeline in list_timeline if "000000000000000-Decoy" not in timeline]
     return list_timeline[0]
@@ -220,6 +219,7 @@ def restore_workflow(item):
     export_timeline_backup(name_timeline, name_timeline_file, item)
     time.sleep(0.5)
     close_davinci_resolve()
+    time.sleep(0.5)
     pyautogui.press("enter")
     update_result_json(name_timeline_file, item)
 
@@ -230,6 +230,7 @@ def main() -> int:
     for item in data_list:
         print('start restore: ', item)
         restore_workflow(item)
+        time.sleep(2)
 
 if __name__ == "__main__":
     raise SystemExit(main())
