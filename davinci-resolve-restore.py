@@ -212,13 +212,13 @@ def restore_workflow(item):
 
     # Replace timeline backup
     replace_timeline_backup(item, name_backup)
-    time.sleep(2)
+    time.sleep(1)
     resolve, project, pm = open_davinci_resolve_and_load_project_restore()
 
     name_timeline = restore_timeline_backup()
     name_timeline_file = f'{name_timeline}-{item["backup_name"]}.drt'
     export_timeline_backup(name_timeline, name_timeline_file, item)
-    time.sleep(1)
+    time.sleep(0.5)
     close_davinci_resolve()
     pyautogui.press("enter")
     update_result_json(name_timeline_file, item)
@@ -226,16 +226,10 @@ def restore_workflow(item):
 def main() -> int:
     data = get_data_from_excel()
     data_list = format_data_for_restore(data)
-    count = 20
-    index = 0
 
     for item in data_list:
-        if index >= count:
-            break
-        index += 1
         print('start restore: ', item)
         restore_workflow(item)
-        time.sleep(2)
 
 if __name__ == "__main__":
     raise SystemExit(main())
