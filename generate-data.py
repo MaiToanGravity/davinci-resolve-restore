@@ -11,6 +11,8 @@ from collections import defaultdict
 from pathlib import Path
 
 import pandas as pd
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+from openpyxl.utils import get_column_letter
 
 
 def iter_files(root: Path, recursive: bool) -> list[Path]:
@@ -63,13 +65,64 @@ _EXCEL_EXPORT_COLUMNS = (
 )
 
 
+_THIN_BORDER = Side(style="thin", color="CCCCCC")
+_CELL_BORDER = Border(
+    left=_THIN_BORDER,
+    right=_THIN_BORDER,
+    top=_THIN_BORDER,
+    bottom=_THIN_BORDER,
+)
+_HEADER_FONT = Font(bold=True, color="FFFFFF", size=11)
+_HEADER_FILL = PatternFill(fill_type="solid", fgColor="4472C4")
+_HEADER_ALIGNMENT = Alignment(horizontal="center", vertical="center", wrap_text=True)
+_WRAP_TOP = Alignment(wrap_text=True, vertical="top")
+_TOP_ALIGN = Alignment(vertical="top")
+_DONE_FILL = PatternFill(fill_type="solid", fgColor="C6EFCE")
+
+_EXCEL_COL_WIDTHS = {
+    "A": 68,
+    "B": 32,
+    "C": 84,
+    "D": 36,
+    "E": 36,
+    "F": 14,
+}
+
+
 def _apply_export_column_widths(ws) -> None:
-    """Chỉnh độ rộng cột Folder, Backup Name, Timeline Name (A–C)."""
-    ws.column_dimensions["A"].width = 68
-    ws.column_dimensions["B"].width = 32
-    ws.column_dimensions["C"].width = 84
-    ws.column_dimensions["D"].width = 36
-    ws.column_dimensions["E"].width = 36
+    """Độ rộng cột export (A–F)."""
+    for col, width in _EXCEL_COL_WIDTHS.items():
+        ws.column_dimensions[col].width = width
+
+
+def _format_export_sheet(ws) -> None:
+    """Cố định hàng tiêu đề, filter, viền, wrap cột dài, tô Status Done."""
+    _apply_export_column_widths(ws)
+    max_row = ws.max_row
+    max_col = ws.max_column
+    if max_row < 1 or max_col < 1:
+        return
+
+    last_col = get_column_letter(max_col)
+    wrap_columns = {1, 3}  # Path Folder, Timeline Name
+
+    for col in range(1, max_col + 1):
+        cell = ws.cell(row=1, column=col)
+        cell.font = _HEADER_FONT
+        cell.fill = _HEADER_FILL
+        cell.alignment = _HEADER_ALIGNMENT
+        cell.border = _CELL_BORDER
+
+    for row_idx in range(2, max_row + 1):
+        for col in range(1, max_col + 1):
+            cell = ws.cell(row=row_idx, column=col)
+            cell.border = _CELL_BORDER
+            cell.alignment = _WRAP_TOP if col in wrap_columns else _TOP_ALIGN
+            if col == 6 and cell.value == "Done":
+                cell.fill = _DONE_FILL
+
+    ws.freeze_panes = "A2"
+    ws.auto_filter.ref = f"A1:{last_col}{max_row}"
 
 
 def _excel_export_row(folder: str, file_path: Path | None, result_json: list[dict]) -> dict[str, str]:
@@ -83,7 +136,6 @@ def _excel_export_row(folder: str, file_path: Path | None, result_json: list[dic
             break
     # Replace \\ to / for Mac OS
     folder = f"{folder.replace("\\", "/")}"
-    print(folder)
     return {
         "Path Folder": folder,
         "Backup Name": backup_name,
@@ -148,7 +200,7 @@ def export_folder_data_to_excel(
                 df = pd.DataFrame(rows, columns=list(_EXCEL_EXPORT_COLUMNS))
                 df.to_excel(writer, sheet_name=sheet_name, index=False)
         for ws in writer.book.worksheets:
-            _apply_export_column_widths(ws)
+            _format_export_sheet(ws)
 
     return out_path
 

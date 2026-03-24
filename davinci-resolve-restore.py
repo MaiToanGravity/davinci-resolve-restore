@@ -82,9 +82,14 @@ def format_data_for_restore(data):
             # Ô trống trong Excel → float('nan'), không phải None — dùng pd.isna
             tn = row["Timeline Name"]
             timeline_name = "" if pd.isna(tn) else str(tn).strip()
+            if "Path Folder" in row.index:
+                folder_raw = row["Path Folder"]
+            else:
+                folder_raw = row["Folder"]
+            folder = "" if pd.isna(folder_raw) else str(folder_raw).strip()
             data_list.append({
-                "folder": row['Folder'],
-                "backup_name": row['Backup Name'],
+                "folder": folder,
+                "backup_name": row["Backup Name"],
                 "timeline_name": timeline_name,
             })
     # Get data from json
