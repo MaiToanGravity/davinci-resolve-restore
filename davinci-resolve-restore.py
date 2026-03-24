@@ -13,6 +13,12 @@ Trên Windows, hook bàn phím toàn cục có thể cần chạy terminal với
 from __future__ import annotations
 from pathlib import PureWindowsPath
 import pyperclip
+import threading
+_stop = threading.Event()
+
+def _on_esc():
+    _stop.set()
+    print("\nĐã nhận Esc — sẽ dừng sau khi bước hiện tại xong.", file=sys.stderr)
 
 BACKUP_LOCATION = r"C:\\Toan\\Project\\Davinci Restore\\Resolve Project Backups"
 ORIGINAL_LOCATION = r"C:\\Toan\\Project\\Davinci Resolve\\davinci-resolve-restore\\original"
@@ -201,57 +207,76 @@ def update_result_json(name_timeline_file, item):
 def restore_workflow(item):
     # Remove all files in BACKUP_LOCATION
     clean_up_backup_folder()
-    open_davinci_resolve_and_load_project_restore()
+    # open_davinci_resolve_and_load_project_restore()
     p = PureWindowsPath(item["folder"])
     name_backup = f"{p.name} - {item["backup_name"]} Backup"
 
     # Create new timeline backup and close app
     create_new_timeline_backup(name_backup)
-    close_davinci_resolve()
+    # close_davinci_resolve()
 
     # Replace timeline backup
     replace_timeline_backup(item, name_backup)
     time.sleep(1)
-    resolve, project, pm = open_davinci_resolve_and_load_project_restore()
+    # resolve, project, pm = open_davinci_resolve_and_load_project_restore()
 
     name_timeline = restore_timeline_backup()
     name_timeline_file = f'{name_timeline}-{item["backup_name"]}.drt'
     export_timeline_backup(name_timeline, name_timeline_file, item)
-    time.sleep(0.5)
-    close_davinci_resolve()
-    time.sleep(0.5)
-    pyautogui.press("enter")
+    # time.sleep(0.5)
+    # close_davinci_resolve()
+    # time.sleep(0.5)
+    # pyautogui.press("enter")
+    print('update result json: ', name_timeline_file)
     update_result_json(name_timeline_file, item)
+
+
+def kill_resolve_process():
+    configure_resolve_paths()
+    resolve = get_resolve()
+    if resolve is None:
+        print("Không tìm thấy Resolve.exe (cài đặt chuẩn trong Program Files).")
+        return 1
+    resolve.Exit()
+    # Kill all process of resolve
 
 def main() -> int:
     data = get_data_from_excel()
     data_list = format_data_for_restore(data)
+    keyboard.add_hotkey("esc", _on_esc)
 
     for item in data_list:
+        if _stop.is_set():
+            print("Đã dừng theo Esc.", file=sys.stderr)
+            break
+
         print('start restore: ', item)
         restore_workflow(item)
-        time.sleep(2)
+        time.sleep(1)
 
 if __name__ == "__main__":
-    while True:
-        try:
-            code = main()
-            if code != 0:
-                print(
-                    f"[retry] main() trả về {code}, chạy lại sau 2 giây…",
-                    file=sys.stderr,
-                )
-                time.sleep(2)
-                continue
-            raise SystemExit(0)
-        except KeyboardInterrupt:
-            print("\nĐã dừng (KeyboardInterrupt).", file=sys.stderr)
-            raise SystemExit(130) from None
-        except Exception:
-            print(
-                "[retry] Lỗi không mong đợi, chạy lại main() sau 2 giây…",
-                file=sys.stderr,
-            )
-            import traceback
-            traceback.print_exc()
-            time.sleep(2)
+    raise SystemExit(main())
+    # while True:
+    #     try:
+    #         code = main()
+    #         if code != 0:
+    #             print(
+    #                 f"[retry] main() trả về {code}, chạy lại sau 2 giây…",
+    #                 file=sys.stderr,
+    #             )
+    #             # Kill resolve process
+    #             kill_resolve_process()
+    #             time.sleep(2)
+    #             continue
+    #         raise SystemExit(0)
+    #     except KeyboardInterrupt:
+    #         print("\nĐã dừng (KeyboardInterrupt).", file=sys.stderr)
+    #         raise SystemExit(130) from None
+    #     except Exception:
+    #         print(
+    #             "[retry] Lỗi không mong đợi, chạy lại main() sau 2 giây…",
+    #             file=sys.stderr,
+    #         )
+    #         import traceback
+    #         traceback.print_exc()
+    #         time.sleep(2)
