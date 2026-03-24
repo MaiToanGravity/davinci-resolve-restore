@@ -251,7 +251,7 @@ def main() -> int:
             break
 
         print('start restore: ', item)
-        restore_workflow(item)
+        # restore_workflow(item)
         time.sleep(1)
 
 if __name__ == "__main__":
