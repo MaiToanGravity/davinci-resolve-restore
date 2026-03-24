@@ -13,19 +13,21 @@ Trên Windows, hook bàn phím toàn cục có thể cần chạy terminal với
 from __future__ import annotations
 from pathlib import PureWindowsPath
 import pyperclip
+import sys
 import threading
+
 _stop = threading.Event()
 
-def _on_esc():
+
+def _on_esc() -> None:
     _stop.set()
-    print("\nĐã nhận Esc — sẽ dừng sau khi bước hiện tại xong.", file=sys.stderr)
+    print("\nĐã nhận Esc — đang dừng…", file=sys.stderr)
 
 BACKUP_LOCATION = r"C:\\Toan\\Project\\Davinci Restore\\Resolve Project Backups"
 ORIGINAL_LOCATION = r"C:\\Toan\\Project\\Davinci Resolve\\davinci-resolve-restore\\original"
 RESTORE_LOCATION = r"C:\\Toan\\Project\\Davinci Resolve\\davinci-resolve-restore\\restore"
 OUTPUT_LOCATION = r"C:\\Toan\\Project\\Davinci Resolve\\davinci-resolve-restore\\output"
 
-import sys
 import pandas as pd
 import pyautogui
 import keyboard
@@ -35,6 +37,29 @@ import json
 import time
 import shutil
 from pathlib import Path
+
+
+class StopRequested(Exception):
+    """User pressed Esc — abort the current restore run."""
+
+
+def _check_stop() -> None:
+    if _stop.is_set():
+        raise StopRequested
+
+
+def _sleep_interruptible(seconds: float, step: float = 0.05) -> None:
+    if seconds <= 0:
+        _check_stop()
+        return
+    deadline = time.monotonic() + seconds
+    while True:
+        _check_stop()
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        time.sleep(min(step, remaining))
+
 
 def get_data_from_excel():
     df = pd.read_excel( os.path.join(OUTPUT_LOCATION, 'data.xlsx'), sheet_name=None)
@@ -68,6 +93,7 @@ def format_data_for_restore(data):
     # Filter data_list not in data_restore
     filtered_data_list = []
     for item in data_list:
+        _check_stop()
         all_same = False
         for restore_item in data_restore:
             if item["folder"] == restore_item["folder"] and item["backup_name"] == restore_item["backup_name"]:
@@ -107,12 +133,16 @@ def open_davinci_resolve_and_load_project_restore():
     return resolve, project, pm
 
 def create_new_timeline_backup(name):
+    _check_stop()
     click_on_decoy_timeline()
+    _check_stop()
     pyautogui.hotkey("ctrl", "alt", "s")
-    time.sleep(0.1)
+    _sleep_interruptible(0.1)
+    _check_stop()
     pyautogui.typewrite(name)
+    _check_stop()
     pyautogui.press("enter")
-    time.sleep(0.1)
+    _sleep_interruptible(0.1)
 
 def close_davinci_resolve():
     pyautogui.click(-21, 15)
@@ -128,12 +158,14 @@ def replace_timeline_backup(item, name_backup):
     files_backup = iter_files(Path(BACKUP_LOCATION), recursive=True)
     original_file = os.path.abspath(os.path.join(ORIGINAL_LOCATION, item["folder"], item["backup_name"]))
     for file in files_backup:
+        _check_stop()
         if name_backup in file.name:
             shutil.copy(original_file, file)
             break
 
 def clean_up_backup_folder():
     for file in os.listdir(BACKUP_LOCATION):
+        _check_stop()
         path = os.path.join(BACKUP_LOCATION, file)
         if os.path.isfile(path):
             os.remove(path)
@@ -141,6 +173,7 @@ def clean_up_backup_folder():
             shutil.rmtree(path)
 
 def get_list_timeline():
+    _check_stop()
     configure_resolve_paths()
     resolve = get_resolve()
     if resolve is None:
@@ -154,6 +187,7 @@ def get_list_timeline():
     count_timeline = project.GetTimelineCount()
     list_timeline = []
     for i in range(1, count_timeline + 1):
+        _check_stop()
         current_timeline = project.GetTimelineByIndex(i)
         current_timeline_name = current_timeline.GetName()
         list_timeline.append(current_timeline_name)
@@ -161,11 +195,14 @@ def get_list_timeline():
     
 
 def restore_timeline_backup():
+    _check_stop()
     right_click_on_decoy_timeline()
     # Auto control restore
     # Type down arrow 9 times
     for i in range(9):
+        _check_stop()
         pyautogui.press("down")
+    _check_stop()
     pyautogui.press("right")
     pyautogui.press("enter")
 
@@ -176,6 +213,7 @@ def restore_timeline_backup():
     return list_timeline[0]
 
 def export_timeline_backup(name_timeline, name_timeline_file, item):
+    _check_stop()
     # Use davinci resolve to export timeline backup
     configure_resolve_paths()
     resolve = get_resolve()
@@ -189,6 +227,7 @@ def export_timeline_backup(name_timeline, name_timeline_file, item):
         return 1
     count_timeline = project.GetTimelineCount()
     for i in range(1, count_timeline + 1):
+        _check_stop()
         current_timeline = project.GetTimelineByIndex(i)
         current_timeline_name = current_timeline.GetName()
         if current_timeline_name == name_timeline:
@@ -198,6 +237,7 @@ def export_timeline_backup(name_timeline, name_timeline_file, item):
             break
 
 def update_result_json(name_timeline_file, item):
+    _check_stop()
     with open(os.path.join(OUTPUT_LOCATION, 'restore_data.json'), 'r') as f:
         data = json.load(f)
     data.append({
@@ -209,26 +249,31 @@ def update_result_json(name_timeline_file, item):
         json.dump(data, f, indent=4)
 
 def restore_workflow(item):
+    _check_stop()
     # Remove all files in BACKUP_LOCATION
     clean_up_backup_folder()
+    _check_stop()
     # open_davinci_resolve_and_load_project_restore()
     p = PureWindowsPath(item["folder"])
     name_backup = f"{p.name} - {item["backup_name"]} Backup"
 
     # Create new timeline backup and close app
     create_new_timeline_backup(name_backup)
+    _check_stop()
     # close_davinci_resolve()
 
     # Replace timeline backup
     print('replace timeline backup: ', name_backup)
     replace_timeline_backup(item, name_backup)
-    time.sleep(1)
+    _sleep_interruptible(1)
+    _check_stop()
     # resolve, project, pm = open_davinci_resolve_and_load_project_restore()
 
     name_timeline = restore_timeline_backup()
     print('restore timeline backup: ', name_timeline)
     name_timeline_file = f'{name_timeline}-{item["backup_name"]}.drt'
     print('export timeline backup: ', name_timeline_file)
+    _check_stop()
     export_timeline_backup(name_timeline, name_timeline_file, item)
     # time.sleep(0.5)
     # close_davinci_resolve()
@@ -248,42 +293,50 @@ def kill_resolve_process():
     # Kill all process of resolve
 
 def main() -> int:
-    data = get_data_from_excel()
-    data_list = format_data_for_restore(data)
-    keyboard.add_hotkey("esc", _on_esc)
+    _stop.clear()
+    try:
+        data = get_data_from_excel()
+        data_list = format_data_for_restore(data)
+    except StopRequested:
+        print("Đã dừng theo Esc.", file=sys.stderr)
+        return 0
 
-    for item in data_list:
-        if _stop.is_set():
-            print("Đã dừng theo Esc.", file=sys.stderr)
-            break
+    try:
+        for item in data_list:
+            _check_stop()
+            print('start restore: ', item)
+            restore_workflow(item)
+            _sleep_interruptible(1)
+    except StopRequested:
+        print("Đã dừng theo Esc.", file=sys.stderr)
+    return 0
 
-        print('start restore: ', item)
-        restore_workflow(item)
-        time.sleep(1)
 
 if __name__ == "__main__":
-    raise SystemExit(main())
-    # while True:
-    #     try:
-    #         code = main()
-    #         if code != 0:
-    #             print(
-    #                 f"[retry] main() trả về {code}, chạy lại sau 2 giây…",
-    #                 file=sys.stderr,
-    #             )
-    #             # Kill resolve process
-    #             kill_resolve_process()
-    #             time.sleep(2)
-    #             continue
-    #         raise SystemExit(0)
-    #     except KeyboardInterrupt:
-    #         print("\nĐã dừng (KeyboardInterrupt).", file=sys.stderr)
-    #         raise SystemExit(130) from None
-    #     except Exception:
-    #         print(
-    #             "[retry] Lỗi không mong đợi, chạy lại main() sau 2 giây…",
-    #             file=sys.stderr,
-    #         )
-    #         import traceback
-    #         traceback.print_exc()
-    #         time.sleep(2)
+    keyboard.add_hotkey("esc", _on_esc)
+    try:
+        while True:
+            try:
+                code = main()
+                if code != 0:
+                    print(
+                        f"[retry] main() trả về {code}, chạy lại sau 2 giây…",
+                        file=sys.stderr,
+                    )
+                    kill_resolve_process()
+                    time.sleep(2)
+                    continue
+                raise SystemExit(0)
+            except KeyboardInterrupt:
+                print("\nĐã dừng (KeyboardInterrupt).", file=sys.stderr)
+                raise SystemExit(130) from None
+            except Exception:
+                print(
+                    "[retry] Lỗi không mong đợi, chạy lại main() sau 2 giây…",
+                    file=sys.stderr,
+                )
+                import traceback
+                traceback.print_exc()
+                time.sleep(2)
+    finally:
+        keyboard.unhook_all()
