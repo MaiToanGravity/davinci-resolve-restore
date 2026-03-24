@@ -54,7 +54,7 @@ def _sanitize_excel_sheet_name(name: str) -> str:
 
 
 _EXCEL_EXPORT_COLUMNS = (
-    "Folder",
+    "Path Folder",
     "Backup Name",
     "Timeline Name",
     "Short description",
@@ -65,8 +65,8 @@ _EXCEL_EXPORT_COLUMNS = (
 
 def _apply_export_column_widths(ws) -> None:
     """Chỉnh độ rộng cột Folder, Backup Name, Timeline Name (A–C)."""
-    ws.column_dimensions["A"].width = 64
-    ws.column_dimensions["B"].width = 36
+    ws.column_dimensions["A"].width = 68
+    ws.column_dimensions["B"].width = 32
     ws.column_dimensions["C"].width = 84
     ws.column_dimensions["D"].width = 36
     ws.column_dimensions["E"].width = 36
@@ -81,8 +81,11 @@ def _excel_export_row(folder: str, file_path: Path | None, result_json: list[dic
             timeline_name = item["timeline_name"]
             status = "Done"
             break
+    # Replace \\ to / for Mac OS
+    folder = f"{folder.replace("\\", "/")}"
+    print(folder)
     return {
-        "Folder": folder,
+        "Path Folder": folder,
         "Backup Name": backup_name,
         "Timeline Name": timeline_name,
         "Short description": "",
@@ -165,6 +168,7 @@ def main() -> int:
     )
     parser.add_argument(
         "--folders",
+        "-f",
         action="store_true",
         help="Liệt kê thư mục con thay vì file",
     )
