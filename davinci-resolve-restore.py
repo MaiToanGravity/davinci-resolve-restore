@@ -245,6 +245,7 @@ def update_result_json(name_timeline_file, item):
         "backup_name": item["backup_name"],
         "timeline_name": name_timeline_file,
     })
+    print(f'Updated {len(data)} items / 3197 total')
     with open(os.path.join(OUTPUT_LOCATION, 'restore_data.json'), 'w') as f:
         json.dump(data, f, indent=4)
 
