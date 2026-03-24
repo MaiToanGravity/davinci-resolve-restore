@@ -42,8 +42,12 @@ def get_data_from_excel():
     return df
 
 def click_on_decoy_timeline():
-    pyautogui.click(-1478, 152)
-    # pyautogui.click(-2216, 156)
+    # pyautogui.click(-1478, 152)
+    pyautogui.click(-2250, 155)
+
+def right_click_on_decoy_timeline():
+    # pyautogui.rightClick(-1478, 152)
+    pyautogui.rightClick(-2250, 155)
 
 def format_data_for_restore(data):
     data_list = []
@@ -157,7 +161,7 @@ def get_list_timeline():
     
 
 def restore_timeline_backup():
-    pyautogui.rightClick(-1478, 152)
+    right_click_on_decoy_timeline()
     # Auto control restore
     # Type down arrow 9 times
     for i in range(9):
@@ -216,12 +220,15 @@ def restore_workflow(item):
     # close_davinci_resolve()
 
     # Replace timeline backup
+    print('replace timeline backup: ', name_backup)
     replace_timeline_backup(item, name_backup)
     time.sleep(1)
     # resolve, project, pm = open_davinci_resolve_and_load_project_restore()
 
     name_timeline = restore_timeline_backup()
+    print('restore timeline backup: ', name_timeline)
     name_timeline_file = f'{name_timeline}-{item["backup_name"]}.drt'
+    print('export timeline backup: ', name_timeline_file)
     export_timeline_backup(name_timeline, name_timeline_file, item)
     # time.sleep(0.5)
     # close_davinci_resolve()
@@ -251,7 +258,7 @@ def main() -> int:
             break
 
         print('start restore: ', item)
-        # restore_workflow(item)
+        restore_workflow(item)
         time.sleep(1)
 
 if __name__ == "__main__":
