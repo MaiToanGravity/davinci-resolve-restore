@@ -67,12 +67,12 @@ def get_data_from_excel():
     return df
 
 def click_on_decoy_timeline():
-    # pyautogui.click(-1478, 152)
-    pyautogui.click(-2250, 155)
+    pyautogui.click(-1478, 152)
+    # pyautogui.click(-2250, 155)
 
 def right_click_on_decoy_timeline():
-    # pyautogui.rightClick(-1478, 152)
-    pyautogui.rightClick(-2250, 155)
+    pyautogui.rightClick(-1478, 152)
+    # pyautogui.rightClick(-2250, 155)
 
 def format_data_for_restore(data):
     data_list = []

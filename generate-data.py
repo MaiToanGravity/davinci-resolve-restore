@@ -65,27 +65,35 @@ _EXCEL_EXPORT_COLUMNS = (
 
 def _apply_export_column_widths(ws) -> None:
     """Chỉnh độ rộng cột Folder, Backup Name, Timeline Name (A–C)."""
-    ws.column_dimensions["A"].width = 60
-    ws.column_dimensions["B"].width = 42
-    ws.column_dimensions["C"].width = 36
+    ws.column_dimensions["A"].width = 64
+    ws.column_dimensions["B"].width = 36
+    ws.column_dimensions["C"].width = 84
     ws.column_dimensions["D"].width = 36
     ws.column_dimensions["E"].width = 36
 
 
-def _excel_export_row(folder: str, file_path: Path | None) -> dict[str, str]:
+def _excel_export_row(folder: str, file_path: Path | None, result_json: list[dict]) -> dict[str, str]:
     backup_name = Path(file_path).name if file_path else ""
+    timeline_name = ""
+    status = ""
+    for item in result_json:
+        if item["folder"] == folder and item["backup_name"] == backup_name:
+            timeline_name = item["timeline_name"]
+            status = "Done"
+            break
     return {
         "Folder": folder,
         "Backup Name": backup_name,
-        "Timeline Name": "",
+        "Timeline Name": timeline_name,
         "Short description": "",
         "Notes": "",
-        "Status": "",
+        "Status": status,
     }
 
 
 def _folder_data_to_rows_by_sheet(
     folder_data: list[dict],
+    result_json: list[dict],
 ) -> dict[str, list[dict[str, str]]]:
     """Gom hàng export (giống Excel) theo tên sheet."""
     by_sheet: dict[str, list[dict[str, str]]] = defaultdict(list)
@@ -97,11 +105,16 @@ def _folder_data_to_rows_by_sheet(
         last = last_folder_per_sheet.get(sheet)
         if files:
             for f in files:
-                by_sheet[sheet].append(_excel_export_row(folder, f))
-                last = folder
+                excel_row = _excel_export_row(folder, f, result_json)
+                if excel_row["Backup Name"] != "":
+                    by_sheet[sheet].append(excel_row)
+                    last = folder
             last_folder_per_sheet[sheet] = last
         else:
-            by_sheet[sheet].append(_excel_export_row(folder, None))
+            excel_row = _excel_export_row(folder, None, result_json)
+            if excel_row["Backup Name"] != "":
+                by_sheet[sheet].append(excel_row)
+                last = folder
             last_folder_per_sheet[sheet] = folder
     return dict(by_sheet)
 
@@ -109,6 +122,7 @@ def _folder_data_to_rows_by_sheet(
 def export_folder_data_to_excel(
     folder_data: list[dict],
     output_dir: Path,
+    result_json: list[dict],
     workbook_name: str = "data.xlsx",
 ) -> Path:
     """
@@ -119,7 +133,7 @@ def export_folder_data_to_excel(
     output_dir.mkdir(parents=True, exist_ok=True)
     out_path = output_dir / workbook_name
 
-    by_sheet = _folder_data_to_rows_by_sheet(folder_data)
+    by_sheet = _folder_data_to_rows_by_sheet(folder_data, result_json)
 
     with pd.ExcelWriter(out_path, engine="openpyxl") as writer:
         if not by_sheet:
@@ -135,35 +149,9 @@ def export_folder_data_to_excel(
 
     return out_path
 
-
-def export_folder_data_to_json(
-    folder_data: list[dict],
-    output_dir: Path,
-    json_name: str = "data.json",
-    *,
-    indent: int = 2,
-) -> Path:
-    """
-    Ghi JSON vào `output_dir`: mảng các object `{ "name": <đường dẫn folder>, "files": [<tên file>, ...] }`.
-    """
-    output_dir = Path(output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    out_path = output_dir / json_name
-
-    payload: list[dict[str, object]] = [
-        {
-            "name": item["folder"],
-            "files": [Path(f).name for f in item["files"]],
-        }
-        for item in folder_data
-    ]
-
-    out_path.write_text(
-        json.dumps(payload, indent=indent, ensure_ascii=False) + "\n",
-        encoding="utf-8",
-    )
-    return out_path
-
+def read_json_file(file_path: Path) -> list[dict]:
+    with open(file_path, "r", encoding="utf-8") as f:
+        return json.load(f)
 
 def main() -> int:
     parser = argparse.ArgumentParser(
@@ -197,6 +185,7 @@ def main() -> int:
     script_dir = Path(__file__).resolve().parent
     root = Path(args.folder).expanduser() if args.folder else script_dir / "original"
     root = root.resolve()
+    result_json = read_json_file(script_dir / "output" / "restore_data.json")
 
     if not root.is_dir():
         print(f"Không tìm thấy thư mục: {root}", file=sys.stderr)
@@ -214,9 +203,6 @@ def main() -> int:
     folder_data = []
     for p in items:
         path = p.resolve() if args.absolute else p.relative_to(root)
-        # Only return path have 4 parts
-        # if len(path.parts) != 4:
-        #     continue
         if len(path.parts) == 4:
             # Get list files in folder
             files = iter_files(p, args.recursive)
@@ -232,10 +218,8 @@ def main() -> int:
     print(f"High number files: {high_number_files} in folder: {high_number_folder}")
     print(f"Total files: {numbers_files}")
     out_dir = script_dir / "output"
-    out = export_folder_data_to_excel(folder_data, out_dir)
+    out = export_folder_data_to_excel(folder_data, out_dir, result_json)
     print(f"Đã xuất Excel: {out}")
-    out_json = export_folder_data_to_json(folder_data, out_dir)
-    print(f"Đã xuất JSON: {out_json}")
     return 0
 
 if __name__ == "__main__":
