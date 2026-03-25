@@ -6,15 +6,17 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from collections import defaultdict
 from pathlib import Path
+from pathlib import PureWindowsPath
 
 import pandas as pd
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
-
+RESTORE_LOCATION = r"C:\\Toan\\Project\\Davinci Resolve\\davinci-resolve-restore\\restore"
 def iter_files(root: Path, recursive: bool) -> list[Path]:
     """Trả về danh sách file (không gồm thư mục), sắp xếp theo đường dẫn."""
     if not root.is_dir():
@@ -132,10 +134,19 @@ def _excel_export_row(folder: str, file_path: Path | None, result_json: list[dic
     for item in result_json:
         if item["folder"] == folder and item["backup_name"] == backup_name:
             timeline_name = item["timeline_name"]
-            status = "Done"
-            break
+            # Check is timeline_name is in restore folder
+            restore_folder_timeline = PureWindowsPath(os.path.join(RESTORE_LOCATION, folder, timeline_name))
+            if os.path.exists(restore_folder_timeline):
+                status = "Done"
+            else:
+                print('restore_folder_timeline: ', restore_folder_timeline)
+                print(repr(restore_folder_timeline))
+                print('folder: ', folder, 'timeline: ', timeline_name, 'not found in restore folder')
+                print('--------------------------------')
+                timeline_name = ""
+
     # Replace \\ to / for Mac OS
-    folder = f"{folder.replace("\\", "/")}"
+    # folder = f"{folder.replace("\\", "/")}"
     return {
         "Path Folder": folder,
         "Backup Name": backup_name,
